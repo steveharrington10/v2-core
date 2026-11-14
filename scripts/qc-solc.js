@@ -7,6 +7,20 @@ const fs = require("node:fs");
 const path = require("node:path");
 const solc = require("@quantumcoin/solc");
 
+// The deployed mainnet bytecode was built with exactly this compiler. Other
+// releases may change wrap-around arithmetic or address width (the core
+// contracts depend on both), so nothing is compiled with any other version.
+const PINNED_COMPILER_VERSION = "0.7.6+commit.6da11747.mod.Emscripten.clang";
+
+function assertPinnedCompiler() {
+  const actual = solc.version();
+  if (actual !== PINNED_COMPILER_VERSION) {
+    throw new Error(
+      `@quantumcoin/solc ${actual} is not the pinned compiler ${PINNED_COMPILER_VERSION}; run npm ci`
+    );
+  }
+}
+
 function toSourceName(filePath) {
   return path.resolve(filePath).split(path.sep).join("/");
 }
@@ -30,6 +44,7 @@ function importCallback(importPath) {
  * @returns standard-JSON output (with errors already checked)
  */
 function compile(sourcePaths, remappings = []) {
+  assertPinnedCompiler();
   const sources = {};
   for (const sourcePath of sourcePaths) {
     sources[toSourceName(sourcePath)] = { content: fs.readFileSync(sourcePath, "utf8") };
@@ -102,4 +117,12 @@ function compilerVersion() {
   return solc.version();
 }
 
-module.exports = { compile, getContract, compileContract, writeArtifacts, compilerVersion };
+module.exports = {
+  PINNED_COMPILER_VERSION,
+  assertPinnedCompiler,
+  compile,
+  getContract,
+  compileContract,
+  writeArtifacts,
+  compilerVersion,
+};

@@ -5,12 +5,23 @@
 //
 // Usage: node scripts/build-production.js
 //   ABIGEN_PATH overrides the abigen2 binary (default C:\build\abigen2.exe).
+//
+// Refuses to build unless the compiler is the pinned release and the offline
+// regression gate (test/offline, run by scripts/offline-checks.js) passes:
+// the deployed contracts are immutable, so this is the last check before them.
 
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { execFileSync } = require("node:child_process");
 const qcSolc = require("./qc-solc");
+const { runOfflineChecks } = require("./offline-checks");
+
+qcSolc.assertPinnedCompiler();
+if (!runOfflineChecks()) {
+  console.error("build-production: offline checks failed; refusing to build production artifacts");
+  process.exit(1);
+}
 
 const core = path.resolve(__dirname, "..");
 const quantumswap = path.resolve(core, "..");

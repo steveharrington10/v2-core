@@ -57,9 +57,9 @@ test("transfer", async () => {
   assert.equal(scalar(await token.balanceOf(wallet.address)), TOTAL_SUPPLY - TEST_AMOUNT);
   assert.equal(scalar(await token.balanceOf(other.address)), TEST_AMOUNT);
 
-  // transfer:fail (ds-math-sub-underflow), checked via eth_call.
-  await expectRevert(staticCall(token, "transfer", [other.address, TOTAL_SUPPLY + 1n]));
-  await expectRevert(staticCall(token, "transfer", [wallet.address, TEST_AMOUNT + 1n], { from: other.address }));
+  // transfer:fail, checked via eth_call.
+  await expectRevert(staticCall(token, "transfer", [other.address, TOTAL_SUPPLY + 1n]), "ds-math-sub-underflow");
+  await expectRevert(staticCall(token, "transfer", [wallet.address, TEST_AMOUNT + 1n], { from: other.address }), "ds-math-sub-underflow");
 });
 
 test("transferFrom", async () => {

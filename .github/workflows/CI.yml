@@ -5,33 +5,49 @@ on:
     branches:
       - master
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
-  test:
+  # Compiler-fork semantics, deployed-bytecode pins and the expectRevert
+  # self-test, in an in-process EVM. Fast, and needs no network after npm ci.
+  offline:
+    name: Offline checks (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
     strategy:
       matrix:
-        node: ['10.x', '12.x']
-        os: [ubuntu-latest]
-
-    runs-on: ${{ matrix.os }}
-
+        node: ['20.x', '22.x']
     steps:
-      - uses: actions/checkout@v1
-      - uses: actions/setup-node@v1
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run compile
+      - run: npm run test:offline
 
-      - run: npm install -g yarn
-
-      - id: yarn-cache
-        run: echo "::set-output name=dir::$(yarn cache dir)"
-      - uses: actions/cache@v1
+  # Full suite against a local QuantumCoin devnet, installed by
+  # scripts/devnet.js from the hash-pinned release archive.
+  devnet:
+    name: Devnet suite
+    needs: offline
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          path: ${{ steps.yarn-cache.outputs.dir }}
-          key: ${{ matrix.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
-          restore-keys: |
-            ${{ matrix.os }}-yarn-
-
-      - run: yarn
-      - run: yarn lint
-      - run: yarn test
+          node-version: '22.x'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm test
+      - name: Upload devnet node log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: devnet-node-log
+          path: ~/quantumcoin-devnet/devnet-node.log
+          if-no-files-found: ignore

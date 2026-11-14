@@ -138,29 +138,92 @@ async function send(txPromise) {
   return receipt;
 }
 
-// Asserts that a promise (transaction send, call, or gas estimate) rejects.
-async function expectRevert(promise, reasonSubstring) {
+// Decodes Solidity Error(string) revert data; null if `data` is not one.
+function decodeErrorString(data) {
+  const hex = typeof data === "string" ? data.toLowerCase() : "";
+  if (!/^0x08c379a0([0-9a-f]{2})*$/.test(hex)) return null;
+  const body = hex.slice(10);
+  const offset = Number.parseInt(body.slice(0, 64), 16) * 2;
+  const length = Number.parseInt(body.slice(offset, offset + 64), 16) * 2;
+  const start = offset + 64;
+  if (!Number.isSafeInteger(offset) || !Number.isSafeInteger(length) || start + length > body.length) return null;
+  return Buffer.from(body.slice(start, start + length), "hex").toString("utf8");
+}
+
+// The error objects a rejection may carry: the SDK error itself, the JSON-RPC
+// error object it wraps (`error.error`, as quantumcoin.js's JsonRpcProvider
+// throws it), and ethers-style nesting.
+function _errorLayers(error) {
+  const layers = [];
+  const queue = [error];
+  while (queue.length > 0 && layers.length < 8) {
+    const item = queue.shift();
+    if (!item || typeof item !== "object" || layers.includes(item)) continue;
+    layers.push(item);
+    queue.push(item.error, item.info && item.info.error, item.cause);
+  }
+  return layers;
+}
+
+// Classifies a rejection. A revert must be reported as one by the node: a
+// message containing "revert", CALL_EXCEPTION, or Error(string) revert data.
+// Client-side failures (bad arguments, out of gas, network) are not reverts.
+function describeRejection(error) {
+  const layers = _errorLayers(error);
+  let reason = null;
+  for (const layer of layers) {
+    reason = decodeErrorString(layer.data);
+    if (reason !== null) break;
+  }
+  if (reason === null) {
+    for (const layer of layers) {
+      const match = /^execution reverted: (.*)$/s.exec(typeof layer.message === "string" ? layer.message : "");
+      if (match) {
+        reason = match[1];
+        break;
+      }
+      if (typeof layer.reason === "string" && layer.reason.length > 0) {
+        reason = layer.reason;
+        break;
+      }
+    }
+  }
+  const isRevert =
+    reason !== null ||
+    layers.some((layer) => layer.code === "CALL_EXCEPTION" || /revert/i.test(String(layer.message || "")));
+  return { isRevert, reason };
+}
+
+// Asserts that a call, gas estimate or sent transaction reverts on-chain and,
+// when `expectedReason` is given, that its revert reason is exactly that string
+// (e.g. "QuantumSwapV2: K"). Any other rejection fails the assertion.
+async function expectRevert(promise, expectedReason) {
+  const expected = expectedReason ? ` '${expectedReason}'` : "";
   let error;
   try {
     const result = await promise;
-    // If this was a sent transaction, wait to see if it reverts on-chain.
+    // A sent transaction reverts by mining with status 0. A receipt carries no
+    // reason string, so a reason can only be checked through a call.
     if (result && typeof result.wait === "function") {
       const receipt = await result.wait(1, 600_000);
-      if (receipt.status !== 1) return;
+      if (receipt.status !== 1) {
+        assert.ok(
+          !expectedReason,
+          `transaction reverted, but its reason cannot be read from a receipt; check${expected} with staticCall`
+        );
+        return;
+      }
     }
   } catch (caught) {
     error = caught;
   }
-  assert.ok(error, `expected revert${reasonSubstring ? ` (${reasonSubstring})` : ""}, but call succeeded`);
-  if (reasonSubstring) {
-    const message = String((error && (error.message || error)) || "");
-    // Only enforce the reason when the RPC surfaced revert data.
-    if (/revert/i.test(message) && message.length > 0 && !message.includes(reasonSubstring)) {
-      // Some RPCs do not include reason strings; tolerate but log.
-      if (/[A-Za-z]+: [A-Z_]+/.test(message)) {
-        assert.fail(`expected revert reason containing '${reasonSubstring}', got: ${message}`);
-      }
-    }
+  assert.ok(error, `expected revert${expected}, but it succeeded`);
+  const { isRevert, reason } = describeRejection(error);
+  const message = String((error && error.message) || error);
+  assert.ok(isRevert, `expected an on-chain revert${expected}, got a different error: ${message}`);
+  if (expectedReason) {
+    assert.ok(reason !== null, `expected revert reason '${expectedReason}', but the node returned none: ${message}`);
+    assert.equal(reason, expectedReason, `wrong revert reason: ${message}`);
   }
 }
 
@@ -239,6 +302,7 @@ module.exports = {
   deploy,
   send,
   expectRevert,
+  describeRejection,
   staticCall,
   scalar,
   expandTo18Decimals,

@@ -45,8 +45,8 @@ async function createPairChecks(factory, tokens) {
   assert.equal(BigInt(event.args[3]), 1n);
 
   // QuantumSwapV2: PAIR_EXISTS (both orderings), verified via eth_call.
-  await expectRevert(staticCall(factory, "createPair", [tokens[0], tokens[1]]), "PAIR_EXISTS");
-  await expectRevert(staticCall(factory, "createPair", [tokens[1], tokens[0]]), "PAIR_EXISTS");
+  await expectRevert(staticCall(factory, "createPair", [tokens[0], tokens[1]]), "QuantumSwapV2: PAIR_EXISTS");
+  await expectRevert(staticCall(factory, "createPair", [tokens[1], tokens[0]]), "QuantumSwapV2: PAIR_EXISTS");
 
   assert.equal(String(await factory.getPair(tokens[0], tokens[1])).toLowerCase(), create2Address.toLowerCase());
   assert.equal(String(await factory.getPair(tokens[1], tokens[0])).toLowerCase(), create2Address.toLowerCase());
@@ -71,8 +71,8 @@ test("createPair:reverse", async () => {
 
 test("createPair:invalid arguments", async () => {
   const factory = await deployFactory();
-  await expectRevert(staticCall(factory, "createPair", [TEST_ADDRESSES[0], TEST_ADDRESSES[0]]), "IDENTICAL_ADDRESSES");
-  await expectRevert(staticCall(factory, "createPair", [qc.ZeroAddress, TEST_ADDRESSES[0]]), "ZERO_ADDRESS");
+  await expectRevert(staticCall(factory, "createPair", [TEST_ADDRESSES[0], TEST_ADDRESSES[0]]), "QuantumSwapV2: IDENTICAL_ADDRESSES");
+  await expectRevert(staticCall(factory, "createPair", [qc.ZeroAddress, TEST_ADDRESSES[0]]), "QuantumSwapV2: ZERO_ADDRESS");
 });
 
 test("setFeeTo / setFeeToSetter permissions", async () => {
@@ -80,12 +80,12 @@ test("setFeeTo / setFeeToSetter permissions", async () => {
   const other = await newFundedWallet();
 
   // QuantumSwapV2: FORBIDDEN when called by non-feeToSetter.
-  await expectRevert(staticCall(factory, "setFeeTo", [other.address], { from: other.address }), "FORBIDDEN");
+  await expectRevert(staticCall(factory, "setFeeTo", [other.address], { from: other.address }), "QuantumSwapV2: FORBIDDEN");
   await send(factory.setFeeTo(wallet.address, { gasLimit: 200_000n }));
   assert.equal(String(await factory.feeTo()).toLowerCase(), wallet.address.toLowerCase());
 
-  await expectRevert(staticCall(factory, "setFeeToSetter", [other.address], { from: other.address }), "FORBIDDEN");
+  await expectRevert(staticCall(factory, "setFeeToSetter", [other.address], { from: other.address }), "QuantumSwapV2: FORBIDDEN");
   await send(factory.setFeeToSetter(other.address, { gasLimit: 200_000n }));
   assert.equal(String(await factory.feeToSetter()).toLowerCase(), other.address.toLowerCase());
-  await expectRevert(staticCall(factory, "setFeeToSetter", [wallet.address], { from: wallet.address }), "FORBIDDEN");
+  await expectRevert(staticCall(factory, "setFeeToSetter", [wallet.address], { from: wallet.address }), "QuantumSwapV2: FORBIDDEN");
 });

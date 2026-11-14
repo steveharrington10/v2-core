@@ -104,8 +104,7 @@ for (const { reserves, cases } of swapTestConfigs) {
         await send(fixture.token0.transfer(fixture.pair.target, delta, overrides));
         transferred = swapAmount;
       }
-      // QuantumSwapV2: K
-      await expectRevert(staticCall(fixture.pair, "swap", [0n, expectedOutput + 1n, wallet.address, EMPTY_BYTES]), "K");
+      await expectRevert(staticCall(fixture.pair, "swap", [0n, expectedOutput + 1n, wallet.address, EMPTY_BYTES]), "QuantumSwapV2: K");
       await staticCall(fixture.pair, "swap", [0n, expectedOutput, wallet.address, EMPTY_BYTES]);
     }
   });
@@ -135,8 +134,7 @@ for (const { reserves, cases } of optimisticTestConfigs) {
         await send(fixture.token0.transfer(fixture.pair.target, delta, overrides));
         transferred = inputAmount;
       }
-      // QuantumSwapV2: K
-      await expectRevert(staticCall(fixture.pair, "swap", [outputAmount + 1n, 0n, wallet.address, EMPTY_BYTES]), "K");
+      await expectRevert(staticCall(fixture.pair, "swap", [outputAmount + 1n, 0n, wallet.address, EMPTY_BYTES]), "QuantumSwapV2: K");
       await staticCall(fixture.pair, "swap", [outputAmount, 0n, wallet.address, EMPTY_BYTES]);
     }
   });
